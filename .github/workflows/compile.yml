@@ -1,4 +1,4 @@
-name: Mihomo MRS Auto Compiler (Stable)
+name: Mihomo MRS Auto Compiler (Stable Fix)
 
 on:
   push:
@@ -16,46 +16,45 @@ jobs:
       - name: 1. 拉取仓库代码
         uses: actions/checkout@v4
 
-      - name: 2. 动态下载最新稳定版内核 (Latest Release)
+      - name: 2. 精准下载最新稳定版内核
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🔍 正在从 Latest Release 中抓取 Linux-amd64 资源..."
+          echo "🔍 正在从 Latest Release 中筛选标准版 Linux-amd64 资源..."
           
-          # 不指定 Tag，gh 默认下载最新稳定版 (v1.x.x)
-          # 匹配规则改为包含版本号的格式，例如 mihomo-linux-amd64-v1.19.24.gz
+          # 1. 下载所有符合条件的包（不使用 --output 防止冲突）
+          # 我们把 Pattern 写得更精准一点，排除掉兼容版(compatible)和特殊指令集版(v2,v3)
+          # 目标通常是: mihomo-linux-amd64-v1.19.24.gz 这种纯净格式
           gh release download --repo MetaCubeX/mihomo \
                               --pattern "mihomo-linux-amd64-v*.gz" \
-                              --output mihomo.gz \
                               --clobber
+
+          # 2. 从下载的一堆文件中，挑出那个“最纯净”的文件
+          # 我们找不含 "compatible", "v1-", "v2-", "v3-", "go1" 的那个
+          RAW_FILE=$(ls mihomo-linux-amd64-v*.gz | grep -vE "compatible|v[123]-|go" | head -n 1)
           
-          echo "📦 正在解压并配置内核..."
-          if [ -f "mihomo.gz" ]; then
-            gunzip -f mihomo.gz
-            chmod +x mihomo
-            ./mihomo -v
-          else
-            echo "❌ 未能找到稳定版文件，请检查 MetaCubeX/mihomo 的 Release 页面文件名格式"
-            exit 1
-          fi
+          echo "🎯 选中的文件是: $RAW_FILE"
+          mv "$RAW_FILE" mihomo.gz
+          
+          echo "📦 正在解压..."
+          gunzip -f mihomo.gz
+          chmod +x mihomo
+          ./mihomo -v
 
       - name: 3. 执行规则转换 (YAML -> MRS)
         run: |
           echo "🏗️ 开始转码..."
           mkdir -p publish
           
-          # 转换域名规则
+          # 核心转换逻辑
           if [ -f "rules/apns_domain.yaml" ]; then
-            # 这里的指令必须确保稳定版内核也支持 convert-ruleset
-            ./mihomo convert-ruleset domain yaml rules/apns_domain.yaml publish/apns.mrs
+            ./mihomo convert-ruleset domain yaml rules/apns_domain.yaml publish/apns_domain.mrs
           fi
           
-          # 转换 IP 规则
           if [ -f "rules/apns_ip.yaml" ]; then
             ./mihomo convert-ruleset ipcidr yaml rules/apns_ip.yaml publish/apns_ip.mrs
           fi
           
-          echo "✅ 转换完成，当前文件清单："
           ls -lh publish/
 
       - name: 4. 推送 MRS 文件到仓库
@@ -67,5 +66,5 @@ jobs:
             echo "没有新变动，跳过推送。"
             exit 0
           fi
-          git commit -m "Auto-compile MRS (Stable): $(date +'%Y-%m-%d %H:%M:%S')"
+          git commit -m "Auto-compile MRS (Stable Picked): $(date +'%Y-%m-%d %H:%M:%S')"
           git push
