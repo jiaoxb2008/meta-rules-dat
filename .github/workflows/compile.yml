@@ -1,72 +1,71 @@
-name: Mihomo MRS Auto Compiler
+name: Mihomo MRS Auto Compiler (Stable)
 
 on:
   push:
     paths:
-      - 'rules/**'       # 只有 rules 文件夹下的文件变动时才触发
-  workflow_dispatch:     # 支持手动点击按钮执行
+      - 'rules/**'
+  workflow_dispatch:
 
 jobs:
   build-and-convert:
     runs-on: ubuntu-latest
     permissions:
-      contents: write    # 赋予推送到仓库的权限
+      contents: write
 
     steps:
-      - name: 1. 拉取当前仓库代码
+      - name: 1. 拉取仓库代码
         uses: actions/checkout@v4
 
-      - name: 2. 动态下载最新 Alpha 版内核
+      - name: 2. 动态下载最新稳定版内核 (Latest Release)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🔍 正在搜索 MetaCubeX/mihomo 最新 Alpha 资源..."
-          # 自动寻找 linux-amd64 架构的 alpha 版本 gz 包
+          echo "🔍 正在从 Latest Release 中抓取 Linux-amd64 资源..."
+          
+          # 不指定 Tag，gh 默认下载最新稳定版 (v1.x.x)
+          # 匹配规则改为包含版本号的格式，例如 mihomo-linux-amd64-v1.19.24.gz
           gh release download --repo MetaCubeX/mihomo \
-                              --pattern "mihomo-linux-amd64-alpha-*.gz" \
+                              --pattern "mihomo-linux-amd64-v*.gz" \
                               --output mihomo.gz \
                               --clobber
           
           echo "📦 正在解压并配置内核..."
-          gunzip -f mihomo.gz
-          chmod +x mihomo
-          ./mihomo -v
+          if [ -f "mihomo.gz" ]; then
+            gunzip -f mihomo.gz
+            chmod +x mihomo
+            ./mihomo -v
+          else
+            echo "❌ 未能找到稳定版文件，请检查 MetaCubeX/mihomo 的 Release 页面文件名格式"
+            exit 1
+          fi
 
       - name: 3. 执行规则转换 (YAML -> MRS)
         run: |
           echo "🏗️ 开始转码..."
-          # 创建发布文件夹
           mkdir -p publish
           
-          # 定义转换函数，方便批量处理
-          # 指令逻辑：convert-ruleset <类型> <源格式> <源文件> <目标文件>
-          
-          # 转换苹果域名规则
+          # 转换域名规则
           if [ -f "rules/apns_domain.yaml" ]; then
-            ./mihomo convert-ruleset domain yaml rules/apns_domain.yaml publish/apns_domain.mrs
+            # 这里的指令必须确保稳定版内核也支持 convert-ruleset
+            ./mihomo convert-ruleset domain yaml rules/apns_domain.yaml publish/apns.mrs
           fi
           
-          # 转换苹果 IP 规则
+          # 转换 IP 规则
           if [ -f "rules/apns_ip.yaml" ]; then
             ./mihomo convert-ruleset ipcidr yaml rules/apns_ip.yaml publish/apns_ip.mrs
           fi
           
-          # 如果你有其他规则，按上面的格式继续添加即可
-          
-          echo "✅ 转换完成，当前 publish 目录文件："
+          echo "✅ 转换完成，当前文件清单："
           ls -lh publish/
 
-      - name: 4. 推送编译好的 MRS 文件到仓库
+      - name: 4. 推送 MRS 文件到仓库
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # 检查是否有文件变动
           git add publish/*.mrs
           if git diff --staged --quiet; then
-            echo "Nothin to commit."
+            echo "没有新变动，跳过推送。"
             exit 0
           fi
-          
-          git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')"
+          git commit -m "Auto-compile MRS (Stable): $(date +'%Y-%m-%d %H:%M:%S')"
           git push
