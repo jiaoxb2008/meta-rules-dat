@@ -16,29 +16,28 @@ jobs:
 
       - name: Get Mihomo
         run: |
-          # 1. 下载符合 linux-amd64 的 .gz 压缩包
-          # 使用 gh 命令行工具，避开 API 限制
-          gh release download --repo MetaCubeX/mihomo --pattern "mihomo-linux-amd64-*.gz"
+          # 使用 jq 动态筛选最稳的 linux-amd64 资产
+          # 过滤掉 alpha、compatible、v3 等后缀，确保抓取到最基础的通用版
+          ASSET_NAME=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | test("^mihomo-linux-amd64-v.*\\.gz$")) | .name' | head -n 1)
           
-          # 2. 挑选一个基础版本的文件（避开 alpha 或 v2/v3 指令集优化版，确保兼容性）
-          # 我们找类似 mihomo-linux-amd64-v1.18.3.gz 的文件
-          FILENAME=$(ls mihomo-linux-amd64-v*.gz | grep -vE "v[0-9]-|alpha" | head -n 1)
+          # 如果没抓到带 v 的，就保底抓第一个 amd64 的 gz
+          if [ -z "$ASSET_NAME" ]; then
+            ASSET_NAME=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | contains("linux-amd64") and endswith(".gz")) | .name' | head -n 1)
+          fi
           
-          # 如果没找到带 v 的基础版，就随便抓第一个 .gz 文件
-          if [ -z "$FILENAME" ]; then FILENAME=$(ls mihomo-linux-amd64-*.gz | head -n 1); fi
-          echo "Selected asset: $FILENAME"
-
-          # 3. 解压 .gz 文件并重命名为 mihomo
-          gunzip -c "$FILENAME" > ./mihomo
+          echo "Found asset: $ASSET_NAME"
+          gh release download --repo MetaCubeX/mihomo --pattern "$ASSET_NAME" --output mihomo.gz
+          
+          # 解压二进制内核
+          gunzip -c mihomo.gz > ./mihomo
           chmod +x ./mihomo
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          # 编译域名集
+          # 确保输出目录干净
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
-          # 编译 IP 集
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
 
       - name: Commit and Push
@@ -46,6 +45,6 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          # 即使文件没变化也不报错，直接退出
-          git commit -m "Auto-update binary MRS files" || exit 0
+          # 哪怕文件没变化，git commit 失败也不会卡死整个工作流
+          git commit -m "Auto-compile MRS rulesets" || exit 0
           git push
