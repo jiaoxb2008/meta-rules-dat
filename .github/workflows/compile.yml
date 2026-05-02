@@ -14,37 +14,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get MRS Tool (Authorized)
+      - name: Get Mihomo (Stable)
         run: |
-          # 使用 GitHub 官方 gh 工具下载，绝对不会下到 9 字节的报错文件
-          # 自动寻找最新的 linux-amd64 压缩包
-          gh release download --repo MetaCubeX/mrs-tool --pattern "mrs-tool-linux-amd64-*.gz" --output tool.gz
+          # 1. 坐标锁定：直接使用 gh 下载 1.18.3 稳定版
+          # 这样能避开 1.19 版本会自动开启代理服务的 Bug
+          gh release download v1.18.3 --repo MetaCubeX/mihomo --pattern "mihomo-linux-amd64-v1.18.3.gz" --output download.gz
           
-          # 解压并准备运行
-          gunzip -c tool.gz > ./mrs-tool
-          chmod +x ./mrs-tool
-          ./mrs-tool -v
+          # 2. 流式解压：直接输出到 ./mihomo，彻底杜绝 mv 报错
+          gunzip -c download.gz > ./mihomo
+          chmod +x ./mihomo
+          
+          # 3. 验证：打出版本号
+          ./mihomo -v
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          # 确保转换过程不卡死，执行即退出
-          echo "🏗️ 正在编译域名规则..."
-          ./mrs-tool convert domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
+          echo "🏗️ 正在编译规则..."
           
-          echo "🏗️ 正在编译 IP 规则..."
-          ./mrs-tool convert ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+          # 域名转换
+          if [ -f "rules/apple_push_domain.yaml" ]; then
+            ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
+          fi
           
-          # 验证文件是否真的出来了
+          # IP 转换
+          if [ -f "rules/apple_push_ip.yaml" ]; then
+            ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
+          fi
+          
+          # 检查结果
           ls -lh *.mrs
-          echo "✅ 编译顺利完成！"
+          echo "✅ 编译完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          # 即使没有变化也提交，确保你能看到最新的 Action 成功绿勾
           git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
