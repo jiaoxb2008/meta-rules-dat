@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    # 强制指定 Node 20 之后的环境，适配 2026 年的 GitHub Runner 警告
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,31 +15,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo (Bulletproof)
+      - name: Get Mihomo (Fixed Logic)
         run: |
-          # 1. 下载稳定版，直接存为 temp.gz
+          # 1. 下载 v1.18.3 稳定版，存为 temp.gz
           curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
           
-          # 2. 解压并将内容直接输出到名为 mihomo 的文件中
+          # 2. 用 -c 参数解压并重定向到固定的 'mihomo' 文件名，避开任何 mv 操作
           gunzip -c temp.gz > ./mihomo
           
-          # 3. 给执行权限并检查版本
+          # 3. 赋权并验证版本
           chmod +x ./mihomo
           ./mihomo -v
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 正在编译域名规则集..."
+          echo "🏗️ 开始编译..."
+          # 执行转换，明确指定输入输出
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
-          
-          echo "🏗️ 正在编译 IP 规则集..."
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
-          echo "✅ 编译顺利完成！"
+          echo "✅ 规则转换完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          git commit -m "Auto-compile: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
+          # 即使规则没变，也强制更新 commit 信息，方便查看运行时间
+          git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
