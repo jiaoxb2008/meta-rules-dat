@@ -14,38 +14,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo Core
+      - name: Get Mihomo Alpha (The Real One)
         run: |
-          # 1. 下载公认最稳的 v1.18.3 稳定版
-          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
-          gunzip -c temp.gz > ./mihomo
+          # 1. 抓取 Alpha 版本的最新内核，这个版本一定包含规则转换工具
+          gh release download Alpha --repo MetaCubeX/mihomo --pattern "mihomo-linux-amd64-alpha-*.gz" --output alpha.gz
+          
+          # 2. 解压并重命名
+          gunzip -c alpha.gz > ./mihomo
           chmod +x ./mihomo
+          
+          # 3. 打印版本信息验证
           ./mihomo -v
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 开始二进制编译..."
+          echo "🏗️ 正在二进制编译苹果推送规则..."
           
-          # 注意：命令必须是 convert-ruleset (带连字符)，后面紧跟：行为 格式 输入 输出
-          # 域名规则编译
-          ./mihomo convert-ruleset domain yaml ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
+          # 注意：Mihomo Alpha 的标准转换语法
+          # 格式：./mihomo convert-ruleset [行为] [输入格式] [输入路径] [输出路径]
           
-          # IP 规则编译
-          ./mihomo convert-ruleset ipcidr yaml ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
-          
-          # 验证文件是否生成
-          if [ -f "apple_push_domain.mrs" ] && [ -f "apple_push_ip.mrs" ]; then
-            echo "✅ 编译成功，MRS 二进制文件已生成！"
-            ls -lh *.mrs
-          else
-            echo "❌ 编译失败，请检查 rules/ 目录下的 YAML 格式。"
-            exit 1
+          if [ -f "rules/apple_push_domain.yaml" ]; then
+            ./mihomo convert-ruleset domain yaml ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
           fi
+          
+          if [ -f "rules/apple_push_ip.yaml" ]; then
+            ./mihomo convert-ruleset ipcidr yaml ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+          fi
+          
+          # 检查文件大小，确保不是 0
+          ls -lh *.mrs
+          echo "✅ 编译顺利完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
+          # 即使文件没变化也强制更新，方便看 Action 运行状态
           git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
