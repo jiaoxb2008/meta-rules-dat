@@ -14,29 +14,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo (Stable version)
+      - name: Get Mihomo (Bulletproof)
         run: |
-          # 锁定 v1.18.3 稳定版，这个版本的 convert 命令极其标准
-          curl -L -o mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
-          gunzip mihomo.gz
-          mv mihomo-linux-amd64* mihomo
-          chmod +x mihomo
+          # 1. 下载稳定版，直接存为 temp.gz
+          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
+          
+          # 2. 解压并将内容直接输出到名为 mihomo 的文件中
+          gunzip -c temp.gz > ./mihomo
+          
+          # 3. 给执行权限并检查版本
+          chmod +x ./mihomo
           ./mihomo -v
 
       - name: Compile Rulesets
         run: |
-          # 加上具体的转换指令，确保它执行完就退出，不启动服务
-          echo "🚀 开始转换域名规则..."
+          echo "🏗️ 正在编译域名规则集..."
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
           
-          echo "🚀 开始转换 IP 规则..."
+          echo "🏗️ 正在编译 IP 规则集..."
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
-          echo "✅ 编译成功！"
+          echo "✅ 编译顺利完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
+          git commit -m "Auto-compile: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
