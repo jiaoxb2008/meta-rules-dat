@@ -1,4 +1,4 @@
-name: Mihomo MRS Auto Compiler (Stable Fix)
+name: Mihomo MRS Auto Compiler
 
 on:
   push:
