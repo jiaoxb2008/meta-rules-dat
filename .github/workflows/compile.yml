@@ -14,44 +14,56 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo Alpha (The Real One)
+      - name: Get Mihomo Alpha (The Hard Way)
         run: |
-          # 1. 抓取 Alpha 版本的最新内核，这个版本一定包含规则转换工具
-          gh release download Alpha --repo MetaCubeX/mihomo --pattern "mihomo-linux-amd64-alpha-*.gz" --output alpha.gz
+          echo "🔍 正在从 Prerelease 页面抓取下载直链..."
+          # 1. 动态获取最新的 Alpha 下载链接，避开 Tag 命名坑
+          DL_URL=$(curl -sL https://github.com/MetaCubeX/mihomo/releases/tag/Prerelease | grep -oP '/MetaCubeX/mihomo/releases/download/Prerelease/mihomo-linux-amd64-alpha-[^"]+\.gz' | head -n 1)
           
-          # 2. 解压并重命名
+          if [ -z "$DL_URL" ]; then
+            echo "❌ 无法解析下载地址，可能是 GitHub 页面结构变了。"
+            exit 1
+          fi
+          
+          FULL_URL="https://github.com$DL_URL"
+          echo "🚀 抓取成功: $FULL_URL"
+          
+          # 2. 下载并解压
+          curl -L -o alpha.gz "$FULL_URL"
           gunzip -c alpha.gz > ./mihomo
           chmod +x ./mihomo
-          
-          # 3. 打印版本信息验证
           ./mihomo -v
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 正在二进制编译苹果推送规则..."
+          echo "🏗️ 正在执行二进制转换..."
           
-          # 注意：Mihomo Alpha 的标准转换语法
-          # 格式：./mihomo convert-ruleset [行为] [输入格式] [输入路径] [输出路径]
+          # 3. 核心修正：使用 Alpha 版最标准的 ruleset convert 语法
+          # 如果这个命令认不到，它会报错退出，绝对不会去开 7890 端口
           
           if [ -f "rules/apple_push_domain.yaml" ]; then
-            ./mihomo convert-ruleset domain yaml ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
+            ./mihomo ruleset convert domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
           fi
           
           if [ -f "rules/apple_push_ip.yaml" ]; then
-            ./mihomo convert-ruleset ipcidr yaml ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+            ./mihomo ruleset convert ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
           fi
           
-          # 检查文件大小，确保不是 0
-          ls -lh *.mrs
-          echo "✅ 编译顺利完成！"
+          # 验证结果
+          if [ -f "apple_push_domain.mrs" ]; then
+            ls -lh *.mrs
+            echo "✅ 规则转换成功！"
+          else
+            echo "❌ 转换失败，尝试备用指令格式..."
+            ./mihomo convert-ruleset domain yaml ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
+            ./mihomo convert-ruleset ipcidr yaml ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+            ls -lh *.mrs
+          fi
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          # 即使文件没变化也强制更新，方便看 Action 运行状态
           git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
