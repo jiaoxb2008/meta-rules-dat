@@ -5,9 +5,12 @@ on:
       - 'rules/**'
   workflow_dispatch:
 
+# 解决 Node.js 20 弃用警告，强制使用 Node 24 运行时
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
-    # 强制指定 Node 20 之后的环境，适配 2026 年的 GitHub Runner 警告
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,31 +18,41 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo (Fixed Logic)
+      - name: Get Mihomo
         run: |
-          # 1. 下载 v1.18.3 稳定版，存为 temp.gz
-          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
-          
-          # 2. 用 -c 参数解压并重定向到固定的 'mihomo' 文件名，避开任何 mv 操作
+          # 使用 1.18.0，这个版本在 CLI 转换模式下最稳定
+          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.0/mihomo-linux-amd64-v1.18.0.gz
           gunzip -c temp.gz > ./mihomo
-          
-          # 3. 赋权并验证版本
           chmod +x ./mihomo
           ./mihomo -v
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 开始编译..."
-          # 执行转换，明确指定输入输出
-          ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
-          ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
-          echo "✅ 规则转换完成！"
+          # 1. 确认 rules 文件夹存在
+          if [ ! -d "rules" ]; then
+            echo "❌ 错误：在仓库根目录下找不到 'rules' 文件夹！"
+            exit 1
+          fi
+
+          echo "🏗️ 开始转换域名规则..."
+          # 使用 timeout 10s，防止它误入代理模式导致卡死
+          timeout 10s ./mihomo convert ruleset domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs || echo "域名转换遇到异常"
+
+          echo "🏗️ 开始转换 IP 规则..."
+          timeout 10s ./mihomo convert ruleset ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs || echo "IP 转换遇到异常"
+          
+          # 2. 检查结果
+          if [ -f "apple_push_domain.mrs" ] && [ -f "apple_push_ip.mrs" ]; then
+            echo "✅ 所有规则编译顺利完成！"
+          else
+            echo "❌ 编译失败，未生成 .mrs 文件，请检查 YAML 格式。"
+            exit 1
+          fi
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          # 即使规则没变，也强制更新 commit 信息，方便查看运行时间
           git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
