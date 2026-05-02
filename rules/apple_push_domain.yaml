@@ -1,0 +1,4 @@
+payload:
+  - 'identity.apple.com'
+  - '+.push.apple.com'
+  - '+.sandbox.push.apple.com'
