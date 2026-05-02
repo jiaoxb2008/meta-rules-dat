@@ -14,37 +14,41 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo
+      - name: Get Mihomo (Turbo Mode)
         run: |
-          # 使用 jq 动态筛选最稳的 linux-amd64 资产
-          # 过滤掉 alpha、compatible、v3 等后缀，确保抓取到最基础的通用版
-          ASSET_NAME=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | test("^mihomo-linux-amd64-v.*\\.gz$")) | .name' | head -n 1)
+          # 获取带 v 且最基础的 linux-amd64 下载直链
+          DL_URL=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | test("^mihomo-linux-amd64-v.*\\.gz$")) | .browser_download_url' | head -n 1)
           
-          # 如果没抓到带 v 的，就保底抓第一个 amd64 的 gz
-          if [ -z "$ASSET_NAME" ]; then
-            ASSET_NAME=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | contains("linux-amd64") and endswith(".gz")) | .name' | head -n 1)
+          if [ -z "$DL_URL" ]; then
+            echo "未抓取到带 v 的版本，尝试抓取通用版..."
+            DL_URL=$(gh release view --repo MetaCubeX/mihomo --json assets --jq '.assets[] | select(.name | contains("linux-amd64") and endswith(".gz")) | .browser_download_url' | head -n 1)
           fi
+
+          echo "🚀 目标下载链接: $DL_URL"
           
-          echo "Found asset: $ASSET_NAME"
-          gh release download --repo MetaCubeX/mihomo --pattern "$ASSET_NAME" --output mihomo.gz
+          # 使用 curl 直接下载，带上进度显示
+          curl -L -o mihomo.gz "$DL_URL"
           
-          # 解压二进制内核
+          echo "📦 正在解压..."
           gunzip -c mihomo.gz > ./mihomo
           chmod +x ./mihomo
+          
+          echo "✅ Mihomo 内核准备就绪！"
+          ./mihomo -v
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          # 确保输出目录干净
+          echo "🏗️ 正在编译 .mrs 规则..."
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
+          echo "✨ 编译完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
-          # 哪怕文件没变化，git commit 失败也不会卡死整个工作流
-          git commit -m "Auto-compile MRS rulesets" || exit 0
+          git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
