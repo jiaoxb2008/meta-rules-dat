@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/github/license/jiaoxb2008/meta-rules-dat?style=flat-square)
 ![Release](https://img.shields.io/github/v/release/MetaCubeX/mihomo?label=Mihomo%20Core&style=flat-square)
 
-本仓库致力于通过 **GitHub Actions** 自动化流水线，将原始规则源码（YAML）实时编译为高效的 **Mihomo (Clash Meta) 二进制规则集 (MRS)**。旨在为透明网关（PVE/OpenWrt）提供极速、精准且低负载的流量分流体验。
+本仓库致力于通过 **GitHub Actions** 自动化流水线，将原始规则源码（YAML）实时编译为高效的 **Mihomo (Clash Meta) 二进制规则集 (MRS)**。旨在为透明网关提供极速、精准且低负载的流量分流体验。
 
 ---
 
