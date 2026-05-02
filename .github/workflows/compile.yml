@@ -5,10 +5,6 @@ on:
       - 'rules/**'
   workflow_dispatch:
 
-# 解决 Node.js 20 弃用警告，强制使用 Node 24 运行时
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,34 +14,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo
+      - name: Get MRS Tool (The Reliable One)
         run: |
-          # 使用 1.18.0，这个版本在 CLI 转换模式下最稳定
-          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.0/mihomo-linux-amd64-v1.18.0.gz
-          gunzip -c temp.gz > ./mihomo
-          chmod +x ./mihomo
-          ./mihomo -v
+          # 下载专用的转换工具，不带代理引擎，绝对不会卡死
+          TAG=$(curl -s https://api.github.com/repos/MetaCubeX/mrs-tool/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -L -o mrs-tool.gz "https://github.com/MetaCubeX/mrs-tool/releases/download/${TAG}/mrs-tool-linux-amd64-${TAG}.gz"
+          gunzip -c mrs-tool.gz > ./mrs-tool
+          chmod +x ./mrs-tool
+          ./mrs-tool -v
 
       - name: Compile Rulesets
         run: |
-          # 1. 确认 rules 文件夹存在
-          if [ ! -d "rules" ]; then
-            echo "❌ 错误：在仓库根目录下找不到 'rules' 文件夹！"
-            exit 1
-          fi
-
-          echo "🏗️ 开始转换域名规则..."
-          # 使用 timeout 10s，防止它误入代理模式导致卡死
-          timeout 10s ./mihomo convert ruleset domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs || echo "域名转换遇到异常"
-
-          echo "🏗️ 开始转换 IP 规则..."
-          timeout 10s ./mihomo convert ruleset ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs || echo "IP 转换遇到异常"
+          echo "🏗️ 正在转换域名规则..."
+          # mrs-tool 的语法非常直接：convert [类型] [输入] [输出]
+          ./mrs-tool convert domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
           
-          # 2. 检查结果
+          echo "🏗️ 正在转换 IP 规则..."
+          ./mrs-tool convert ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+          
           if [ -f "apple_push_domain.mrs" ] && [ -f "apple_push_ip.mrs" ]; then
-            echo "✅ 所有规则编译顺利完成！"
+            echo "✅ 二进制 MRS 文件已全部生成！"
           else
-            echo "❌ 编译失败，未生成 .mrs 文件，请检查 YAML 格式。"
+            echo "❌ 转换失败，请检查 rules/ 目录下的文件。"
             exit 1
           fi
 
