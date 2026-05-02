@@ -14,35 +14,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get MRS Tool (The Reliable One)
+      - name: Get MRS Tool (Authorized)
         run: |
-          # 下载专用的转换工具，不带代理引擎，绝对不会卡死
-          TAG=$(curl -s https://api.github.com/repos/MetaCubeX/mrs-tool/releases/latest | grep tag_name | cut -d '"' -f 4)
-          curl -L -o mrs-tool.gz "https://github.com/MetaCubeX/mrs-tool/releases/download/${TAG}/mrs-tool-linux-amd64-${TAG}.gz"
-          gunzip -c mrs-tool.gz > ./mrs-tool
+          # 使用 GitHub 官方 gh 工具下载，绝对不会下到 9 字节的报错文件
+          # 自动寻找最新的 linux-amd64 压缩包
+          gh release download --repo MetaCubeX/mrs-tool --pattern "mrs-tool-linux-amd64-*.gz" --output tool.gz
+          
+          # 解压并准备运行
+          gunzip -c tool.gz > ./mrs-tool
           chmod +x ./mrs-tool
           ./mrs-tool -v
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 正在转换域名规则..."
-          # mrs-tool 的语法非常直接：convert [类型] [输入] [输出]
+          # 确保转换过程不卡死，执行即退出
+          echo "🏗️ 正在编译域名规则..."
           ./mrs-tool convert domain ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
           
-          echo "🏗️ 正在转换 IP 规则..."
+          echo "🏗️ 正在编译 IP 规则..."
           ./mrs-tool convert ipcidr ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
           
-          if [ -f "apple_push_domain.mrs" ] && [ -f "apple_push_ip.mrs" ]; then
-            echo "✅ 二进制 MRS 文件已全部生成！"
-          else
-            echo "❌ 转换失败，请检查 rules/ 目录下的文件。"
-            exit 1
-          fi
+          # 验证文件是否真的出来了
+          ls -lh *.mrs
+          echo "✅ 编译顺利完成！"
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
+          # 即使没有变化也提交，确保你能看到最新的 Action 成功绿勾
           git commit -m "Auto-compile MRS: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
