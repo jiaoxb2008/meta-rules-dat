@@ -14,40 +14,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo (Fixed)
+      - name: Get Mihomo (Stable version)
         run: |
-          # 1. 抓取最新 Release 的版本号和文件名
-          # 我们先用 gh 拿到最新版的 Tag
-          TAG=$(gh release view --repo MetaCubeX/mihomo --json tagName --jq '.tagName')
-          
-          # 2. 锁定我们要的文件名模式 (linux-amd64-v 开头的 .gz)
-          # 注意：这里我们抓取 .name，这个字段在 gh 里是绝对存在的
-          ASSET_NAME=$(gh release view --repo MetaCubeX/mihomo --json assets --jq ".assets[] | select(.name | test(\"mihomo-linux-amd64-v.*\\\\.gz$\")) | .name" | head -n 1)
-          
-          echo "🏷️ Tag: $TAG"
-          echo "📦 Asset: $ASSET_NAME"
-
-          # 3. 拼接直链。这是 GitHub 最稳的下载路径格式
-          DL_URL="https://github.com/MetaCubeX/mihomo/releases/download/${TAG}/${ASSET_NAME}"
-          echo "🚀 最终下载地址: $DL_URL"
-
-          # 4. 使用 curl 下载，加上 -f (报错即停止) 和 -sS (静默但显示错误)
-          curl -L -f -o mihomo.gz "$DL_URL"
-          
-          # 5. 解压并赋予权限
-          gunzip -c mihomo.gz > ./mihomo
-          chmod +x ./mihomo
-          
-          # 验证
+          # 锁定 v1.18.3 稳定版，这个版本的 convert 命令极其标准
+          curl -L -o mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
+          gunzip mihomo.gz
+          mv mihomo-linux-amd64* mihomo
+          chmod +x mihomo
           ./mihomo -v
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          # 编译逻辑保持不变
+          # 加上具体的转换指令，确保它执行完就退出，不启动服务
+          echo "🚀 开始转换域名规则..."
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
+          
+          echo "🚀 开始转换 IP 规则..."
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
+          echo "✅ 编译成功！"
 
       - name: Commit and Push
         run: |
