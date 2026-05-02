@@ -11,20 +11,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Get Mihomo
         run: |
-          # 自动获取最新版本并下载
-          TAG=$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | grep tag_name | cut -d '"' -f 4)
-          curl -L -o mihomo.tar.gz https://github.com/MetaCubeX/mihomo/releases/download/${TAG}/mihomo-linux-amd64-${TAG}.tar.gz
+          # 使用 GitHub 官方命令行工具下载最新发布版，避开 API 频率限制
+          gh release download --repo MetaCubeX/mihomo --pattern "*linux-amd64*.tar.gz" --output mihomo.tar.gz
           tar -xzf mihomo.tar.gz
-          mv mihomo-linux-amd64* mihomo
+          # 寻找解压出来的二进制文件（兼容不同版本的命名风格）并重命名
+          find . -name "mihomo-linux-amd64*" -type f -exec mv {} ./mihomo \;
           chmod +x mihomo
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-      - name: Compile
+      - name: Compile Rulesets
         run: |
+          # 编译域名集 (Behavior: domain)
           ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
+          # 编译 IP 集 (Behavior: ipcidr)
           ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
 
       - name: Commit and Push
@@ -32,5 +37,6 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.mrs
+          # 如果文件没有变化，则跳过 commit 而不报错
           git commit -m "Update binary MRS files" || exit 0
           git push
