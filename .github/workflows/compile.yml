@@ -14,38 +14,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get Mihomo (Stable)
+      - name: Get Mihomo Core
         run: |
-          # 1. 坐标锁定：直接使用 gh 下载 1.18.3 稳定版
-          # 这样能避开 1.19 版本会自动开启代理服务的 Bug
-          gh release download v1.18.3 --repo MetaCubeX/mihomo --pattern "mihomo-linux-amd64-v1.18.3.gz" --output download.gz
-          
-          # 2. 流式解压：直接输出到 ./mihomo，彻底杜绝 mv 报错
-          gunzip -c download.gz > ./mihomo
+          # 1. 下载公认最稳的 v1.18.3 稳定版
+          curl -L -o temp.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
+          gunzip -c temp.gz > ./mihomo
           chmod +x ./mihomo
-          
-          # 3. 验证：打出版本号
           ./mihomo -v
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Compile Rulesets
         run: |
-          echo "🏗️ 正在编译规则..."
+          echo "🏗️ 开始二进制编译..."
           
-          # 域名转换
-          if [ -f "rules/apple_push_domain.yaml" ]; then
-            ./mihomo convert ruleset domain rules/apple_push_domain.yaml apple_push_domain.mrs
+          # 注意：命令必须是 convert-ruleset (带连字符)，后面紧跟：行为 格式 输入 输出
+          # 域名规则编译
+          ./mihomo convert-ruleset domain yaml ./rules/apple_push_domain.yaml ./apple_push_domain.mrs
+          
+          # IP 规则编译
+          ./mihomo convert-ruleset ipcidr yaml ./rules/apple_push_ip.yaml ./apple_push_ip.mrs
+          
+          # 验证文件是否生成
+          if [ -f "apple_push_domain.mrs" ] && [ -f "apple_push_ip.mrs" ]; then
+            echo "✅ 编译成功，MRS 二进制文件已生成！"
+            ls -lh *.mrs
+          else
+            echo "❌ 编译失败，请检查 rules/ 目录下的 YAML 格式。"
+            exit 1
           fi
-          
-          # IP 转换
-          if [ -f "rules/apple_push_ip.yaml" ]; then
-            ./mihomo convert ruleset ipcidr rules/apple_push_ip.yaml apple_push_ip.mrs
-          fi
-          
-          # 检查结果
-          ls -lh *.mrs
-          echo "✅ 编译完成！"
 
       - name: Commit and Push
         run: |
