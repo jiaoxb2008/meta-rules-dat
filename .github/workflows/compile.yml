@@ -3,7 +3,7 @@ name: Mihomo MRS Auto Compiler
 on:
   push:
     paths:
-      - 'src/**'       # 1. 监听 src 文件夹的变化
+      - 'src/**' # 1. 监听 src 文件夹的变化
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
           gh release download --repo MetaCubeX/mihomo \
                               --pattern "mihomo-linux-amd64-v*.gz" \
                               --clobber
-          
+
           RAW_FILE=$(ls mihomo-linux-amd64-v*.gz | grep -vE "compatible|v[123]-|go" | head -n 1)
           mv "$RAW_FILE" mihomo.gz
           gunzip -f mihomo.gz
@@ -35,18 +35,21 @@ jobs:
           echo "🏗️ 开始转码..."
           # 2. 自动创建 dist 文件夹
           mkdir -p dist
-          
+
           # 3. 更新转换路径 (源在 src，产物在 dist)
           # 指令：convert-ruleset <类型> <源格式> <源文件> <目标文件>
-          
-          if [ -f "src/apns_domain.yaml" ]; then
-            ./mihomo convert-ruleset domain yaml src/apns_domain.yaml dist/apns_domain.mrs
-          fi
-          
-          if [ -f "src/apns_ip.yaml" ]; then
-            ./mihomo convert-ruleset ipcidr yaml src/apns_ip.yaml dist/apns_ip.mrs
-          fi
-          
+          for file in src/*.yaml; do
+            [ -e "$file" ] || continue
+            filename=$(basename "$file" .yaml)
+
+            # 根据文件名后缀自动判断类型（*_ip.yaml 走 ipcidr，其他默认走 domain）
+            if [[ "$filename" == *_ip ]]; then
+              ./mihomo convert-ruleset ipcidr yaml "$file" "dist/${filename}.mrs"
+            else
+              ./mihomo convert-ruleset domain yaml "$file" "dist/${filename}.mrs"
+            fi
+          done
+
           echo "✅ 转换完成，当前产物："
           ls -lh dist/
 
@@ -54,14 +57,14 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
+
           # 4. 更新 Git 跟踪的路径
           git add dist/*.mrs
-          
+
           if git diff --staged --quiet; then
             echo "没有新变动，跳过推送。"
             exit 0
           fi
-          
+
           git commit -m "Build: auto-generate MRS from src (Stable) $(date +'%Y-%m-%d %H:%M:%S')"
           git push
