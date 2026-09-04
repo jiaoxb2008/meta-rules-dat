@@ -67,4 +67,5 @@ jobs:
           fi
 
           git commit -m "Build: auto-generate MRS from src (Stable) $(date +'%Y-%m-%d %H:%M:%S')"
+          git pull --rebase
           git push
