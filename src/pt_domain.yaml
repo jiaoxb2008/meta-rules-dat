@@ -23,4 +23,4 @@ payload:
   - '+.cspt.top'
   - '+.ptlgs.org'
   - '+.gamegamept.com'
-  - '+.agsvpt.cn'
+  - '*agsvpt*'
