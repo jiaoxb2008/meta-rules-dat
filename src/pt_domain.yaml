@@ -1,4 +1,5 @@
 payload:
+  - '+.audiences.me'
   - '+.hhanclub.net'
   - '+.m-team.cc'
   - '+.m-team.io'
