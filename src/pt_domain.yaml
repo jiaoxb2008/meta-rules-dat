@@ -50,4 +50,4 @@ payload:
   - '+.colapt.com'
   - '+.longpt.org'
   - '+.yemapt.org'
-  = '+.playlet.cc'
+  - '+.playlet.cc'
